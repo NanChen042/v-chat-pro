@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微信 (WeChat) 调试版</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f7f7f7;
+            font-family: -apple-system, system-ui, sans-serif;
+        }
+
+        .wechat-bg {
+            background-color: #ededed;
+        }
+
+        .message-me {
+            background-color: #95ec69;
+            position: relative;
+        }
+
+        .message-me::after {
+            content: '';
+            position: absolute;
+            right: -8px;
+            top: 12px;
+            border: 4px solid transparent;
+            border-left-color: #95ec69;
+        }
+
+        .message-other {
+            background-color: #ffffff;
+            position: relative;
+        }
+
+        .message-other::after {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 12px;
+            border: 4px solid transparent;
+            border-right-color: #ffffff;
+        }
+
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .ios-top {
+            height: env(safe-area-inset-top);
+            background: #ededed;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col items-center justify-center p-0 md:p-10 min-h-screen">
+
+    <!-- WeChat Phone Window -->
+    <div class="w-full max-w-[400px] h-[800px] bg-[#f7f7f7] shadow-2xl flex flex-col relative overflow-hidden border border-gray-200 md:rounded-[40px]">
+
+        <!-- Top Status Bar (Simulation) -->
+        <div class="h-6 bg-[#ededed] flex justify-between px-6 items-end pb-1">
+            <span class="text-[10px] font-bold">10:07</span>
+            <div class="flex gap-1 items-center">
+                <div class="w-2 h-2 bg-black rounded-full opacity-50"></div>
+                <div class="w-3 h-2 bg-black rounded-[1px] opacity-50"></div>
+            </div>
+        </div>
+
+        <!-- WeChat Header -->
+        <div class="wechat-bg h-14 border-b border-gray-300 flex items-center px-4 relative shrink-0">
+            <div class="flex-1 flex items-center gap-2">
+                <div id="back-btn" class="hidden cursor-pointer" onclick="closeChat()">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </div>
+                <span id="header-title" class="text-[17px] font-semibold text-[#000000]">微信</span>
+                <div id="status-dot" class="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="reconnect()" title="重新连接" class="text-[#000000]">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Identity Bar (Hidden in chat) -->
+        <div id="identity-bar" class="bg-yellow-50 px-4 py-2 border-b border-yellow-100 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-[11px] text-yellow-700">登录 ID:</span>
+                <input type="number" id="myId" value="1" onchange="reconnect()" class="w-10 bg-transparent text-[11px] font-bold text-yellow-800 focus:outline-none">
+            </div>
+            <button onclick="showPanel('add')" class="text-[11px] font-bold text-blue-600">添加好友</button>
+        </div>
+
+        <!-- Main Content (Friend List or Chat) -->
+        <div id="main-scroll" class="flex-1 overflow-y-auto hide-scrollbar">
+            <!-- Friend List View -->
+            <div id="friend-view" class="divide-y divide-gray-200">
+                <div class="p-4 bg-white text-gray-400 text-xs text-center">点击刷新同步好友列表</div>
+            </div>
+
+            <!-- Chat View -->
+            <div id="chat-view" class="hidden h-full flex flex-col p-4 space-y-4">
+                <!-- Messages populate here -->
+            </div>
+        </div>
+
+        <!-- Add Friend Overlay -->
+        <div id="add-friend-overlay" class="absolute inset-0 bg-white/95 z-20 translate-y-full transition-transform duration-300 p-8">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-xl font-bold text-black">查找朋友</h2>
+                <button onclick="showPanel('list')" class="text-[#576b95] font-bold">取消</button>
+            </div>
+            <div class="bg-gray-100 rounded-lg flex items-center px-4 py-3 mb-6">
+                <svg class="w-5 h-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="number" id="targetId" placeholder="输入 ID" class="bg-transparent flex-1 focus:outline-none text-[15px]">
+            </div>
+            <button onclick="sendRequest()" class="w-full bg-[#07c160] text-white py-3 rounded-lg font-bold">发起申请</button>
+        </div>
+
+        <!-- Bottom Tab Bar (Only in List View) -->
+        <div id="tab-bar" class="h-14 wechat-bg border-t border-gray-300 flex justify-around items-center shrink-0">
+            <div class="flex flex-col items-center gap-0.5 cursor-pointer text-[#07c160]">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M2.5 13.5V5a2 2 0 012-2H13a2 2 0 012 2v2.5H18.5A2 2 0 0120.5 9.5V18a2 2 0 01-2 2H10a2 2 0 01-2-2V15.5H4.5a2 2 0 01-2-2zM4.5 5v8.5h5V5h-5zM10 18.5h8.5V9.5H10v9z" />
+                </svg>
+                <span id="main-tab-name" class="text-[10px]">微信</span>
+            </div>
+            <div id="contacts-tab" class="flex flex-col items-center gap-0.5 cursor-pointer text-[#333333] relative" onclick="fetchFriends()">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <div id="contact-dot" class="absolute top-0 right-3 w-2 h-2 bg-red-500 rounded-full hidden"></div>
+                <span class="text-[10px]">通讯录</span>
+            </div>
+        </div>
+
+        <!-- Bottom Input Bar (Only in Chat View) -->
+        <div id="input-bar" class="hidden wechat-bg border-t border-gray-300 px-3 py-2 min-h-[50px] flex items-end gap-2 shrink-0">
+            <div class="mb-1 cursor-pointer">
+                <svg class="w-7 h-7 text-[#000000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+            </div>
+            <div class="flex-1 bg-white rounded-md min-h-[38px] p-2">
+                <textarea id="msg-input" rows="1" class="w-full bg-transparent border-none focus:ring-0 resize-none text-[15px] leading-tight hide-scrollbar" style="outline:none;"></textarea>
+            </div>
+            <div class="flex gap-2 mb-1">
+                <button id="send-btn" onclick="sendMsg()" class="bg-[#07c160] text-white px-3 py-1 rounded text-[14px] font-bold">发送</button>
+            </div>
+        </div>
+
+        <!-- Home Indicator -->
+        <div class="h-6 wechat-bg flex justify-center items-end pb-2">
+            <div class="w-32 h-1 bg-gray-400/30 rounded-full"></div>
+        </div>
+    </div>
+
+    <script>
+        let socket;
+        let currentReceiverId = null;
+        const apiHost = 'http://localhost:3000';
+
+        function showPanel(name) {
+            const overlay = document.getElementById('add-friend-overlay');
+            overlay.style.transform = name === 'add' ? 'translateY(0)' : 'translateY(100%)';
+        }
+
+        function closeChat() {
+            document.getElementById('chat-view').classList.add('hidden');
+            document.getElementById('friend-view').classList.remove('hidden');
+            document.getElementById('identity-bar').classList.remove('hidden');
+            document.getElementById('input-bar').classList.add('hidden');
+            document.getElementById('tab-bar').classList.remove('hidden');
+            document.getElementById('back-btn').classList.add('hidden');
+            document.getElementById('header-title').innerText = '微信';
+            currentReceiverId = null;
+        }
+
+        function startPrivateChat(id, name) {
+            currentReceiverId = id;
+            document.getElementById('chat-view').classList.remove('hidden');
+            document.getElementById('friend-view').classList.add('hidden');
+            document.getElementById('identity-bar').classList.add('hidden');
+            document.getElementById('input-bar').classList.remove('hidden');
+            document.getElementById('tab-bar').classList.add('hidden');
+            document.getElementById('back-btn').classList.remove('hidden');
+            document.getElementById('header-title').innerText = name;
+
+            const chatBox = document.getElementById('chat-view');
+            chatBox.innerHTML = '';
+
+            // Fetch History
+            const myId = document.getElementById('myId').value;
+            fetch(`${apiHost}/chat/history?user1Id=${myId}&user2Id=${id}`)
+                .then(res => res.json())
+                .then(history => {
+                    history.forEach(msg => {
+                        const side = msg.senderId === parseInt(myId) ? 'me' : 'other';
+                        addMessage(side, msg.content);
+                    });
+                });
+        }
+
+        function addMessage(side, content) {
+            const chatBox = document.getElementById('chat-view');
+            const wrap = document.createElement('div');
+            wrap.className = side === 'me' ? 'flex flex-row-reverse items-start gap-2' : 'flex items-start gap-2';
+
+            const avatar = `<div class="w-10 h-10 bg-gray-300 rounded-md shrink-0"></div>`;
+            const text = `<div class="${side === 'me' ? 'message-me' : 'message-other'} max-w-[240px] p-2.5 rounded-[4px] text-[15px] font-medium leading-normal break-words">${content}</div>`;
+
+            wrap.innerHTML = avatar + text;
+            chatBox.appendChild(wrap);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function reconnect() {
+            if (socket) socket.disconnect();
+            const myId = document.getElementById('myId').value;
+            socket = io(apiHost, { query: { userId: myId } });
+
+            socket.on('connect', () => {
+                document.getElementById('status-dot').className = "w-1.5 h-1.5 bg-[#07c160] rounded-full";
+                fetchFriends();
+                fetchUserInfo(myId);
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('status-dot').className = "w-1.5 h-1.5 bg-red-400 rounded-full";
+            });
+
+            socket.on('message', (data) => {
+                const myIdVal = parseInt(document.getElementById('myId').value);
+                const side = data.senderId === myIdVal ? 'me' : 'other';
+                if (currentReceiverId === data.senderId || currentReceiverId === data.receiverId || !currentReceiverId) {
+                    addMessage(side, data.content);
+                }
+            });
+
+            socket.on('friendRequest', (data) => {
+                const choice = confirm(`用户 ${data.requesterName} (ID: ${data.requesterId}) 请求添加你为好友。\n点击"确定"同意，点击"取消"则询问是否拒绝。`);
+                if (choice) {
+                    acceptFriendRequest(data.requestId);
+                } else {
+                    if (confirm('是否拒绝该好友申请？')) {
+                        rejectFriendRequest(data.requestId);
+                    }
+                }
+            });
+
+            socket.on('friendAccepted', (data) => {
+                alert(`与 ${data.friendName} 已成为好友`);
+                fetchFriends();
+            });
+
+            socket.on('friendRejected', (data) => {
+                alert(`用户 ${data.friendName} 拒绝添加您为好友`);
+            });
+        }
+
+        async function fetchUserInfo(id) {
+            try {
+                const res = await fetch(`${apiHost}/user/info?id=${id}`);
+                const user = await res.json();
+                if (user && user.username) {
+                    document.getElementById('header-title').innerText = user.username;
+                    document.getElementById('main-tab-name').innerText = user.username;
+                }
+            } catch (err) {
+                console.error('获取用户信息失败:', err);
+            }
+        }
+
+        async function acceptFriendRequest(requestId) {
+            const myId = parseInt(document.getElementById('myId').value);
+            const res = await fetch(`${apiHost}/user/friend/accept`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: myId, requestId })
+            });
+            if (res.ok) {
+                alert('已通过申请');
+                fetchFriends();
+            } else {
+                const data = await res.json();
+                alert('操作失败: ' + (data.message || '未知错误'));
+            }
+        }
+
+        async function rejectFriendRequest(requestId) {
+            const myId = parseInt(document.getElementById('myId').value);
+            const res = await fetch(`${apiHost}/user/friend/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: myId, requestId })
+            });
+            if (res.ok) {
+                alert('已拒绝申请');
+            } else {
+                const data = await res.json();
+                alert('操作失败: ' + (data.message || '未知错误'));
+            }
+        }
+
+        async function sendRequest() {
+            const requesterId = parseInt(document.getElementById('myId').value);
+            const addresseeId = parseInt(document.getElementById('targetId').value);
+            const res = await fetch(`${apiHost}/user/friend/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requesterId, addresseeId })
+            });
+            const data = await res.json();
+            alert(res.ok ? '申请已发送' : data.message);
+            showPanel('list');
+        }
+
+        async function fetchFriends() {
+            const myId = document.getElementById('myId').value;
+            if (!myId) return;
+
+            try {
+                // 并行获取好友和待处理请求
+                const [friendsRes, pendingRes] = await Promise.all([
+                    fetch(`${apiHost}/user/friend/list?userId=${myId}`),
+                    fetch(`${apiHost}/user/friend/pending?userId=${myId}`)
+                ]);
+
+                const friends = await friendsRes.json();
+                const pending = await pendingRes.json();
+
+                // 更新红点
+                const dot = document.getElementById('contact-dot');
+                if (pending && pending.length > 0) {
+                    dot.classList.remove('hidden');
+                } else {
+                    dot.classList.add('hidden');
+                }
+
+                if (!Array.isArray(friends)) {
+                    console.error('获取好友列表失败:', friends);
+                    return;
+                }
+
+                const friendView = document.getElementById('friend-view');
+                let html = '';
+
+                // 如果有待处理请求，显示“新的朋友”入口
+                if (pending && pending.length > 0) {
+                    html += `<div class="bg-[#f0f0f0] px-4 py-2 text-[13px] text-gray-500">待验证申请</div>`;
+                    pending.forEach(req => {
+                        html += `
+                            <div class="bg-white px-4 py-3 flex items-center gap-3 border-b border-gray-100">
+                                <div class="w-10 h-10 bg-orange-400 rounded-md flex items-center justify-center font-bold text-white text-lg">${req.requester.username[0]}</div>
+                                <div class="flex-1">
+                                    <div class="text-[17px] font-regular">${req.requester.username}</div>
+                                    <div class="text-[13px] text-gray-400">请求添加你为好友</div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="handlePendingRequest(${req.id}, 'accept')" class="bg-[#07c160] text-white text-[13px] px-3 py-1 rounded">通过</button>
+                                    <button onclick="handlePendingRequest(${req.id}, 'reject')" class="bg-gray-100 text-gray-600 text-[13px] px-3 py-1 rounded">拒绝</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                // 好友列表
+                html += `<div class="bg-[#f0f0f0] px-4 py-2 text-[13px] text-gray-500">通讯录</div>`;
+                if (friends.length > 0) {
+                    html += friends.map(f => `
+                        <div class="bg-white px-4 py-3 flex items-center gap-3 cursor-pointer active:bg-gray-100" onclick="startPrivateChat(${f.id}, '${f.username}')">
+                            <div class="w-10 h-10 bg-gray-200 rounded-md flex items-center justify-center font-bold text-gray-500">${f.username ? f.username[0] : '?'}</div>
+                            <div class="flex-1">
+                                <div class="text-[17px] font-regular">${f.username || '未知用户'}</div>
+                                <div class="text-[13px] text-gray-400">ID: ${f.id}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    html += '<div class="p-8 text-center text-gray-400 bg-white">暂无好友</div>';
+                }
+
+                friendView.innerHTML = html;
+            } catch (err) {
+                console.error('网络请求错误:', err);
+                alert('获取好友列表失败，请检查后端服务');
+            }
+        }
+
+        async function handlePendingRequest(requestId, action) {
+            const myId = parseInt(document.getElementById('myId').value);
+            const endpoint = action === 'accept' ? 'accept' : 'reject';
+            const res = await fetch(`${apiHost}/user/friend/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: myId, requestId })
+            });
+
+            if (res.ok) {
+                alert(action === 'accept' ? '已通过申请' : '已拒绝申请');
+                fetchFriends();
+            } else {
+                const data = await res.json();
+                alert('操作失败: ' + (data.message || '未知错误'));
+            }
+        }
+
+        function sendMsg() {
+            const input = document.getElementById('msg-input');
+            const content = input.value.trim();
+            const myId = parseInt(document.getElementById('myId').value);
+            if (!content || !socket) return;
+
+            socket.emit('sendMessage', { senderId: myId, receiverId: currentReceiverId, content: content });
+            input.value = '';
+            input.style.height = 'auto';
+        }
+
+        // Auto-resize textarea
+        const textarea = document.getElementById('msg-input');
+        textarea.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        reconnect();
+    </script>
+</body>
+
+</html>

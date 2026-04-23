@@ -116,7 +116,7 @@ const getAvatarColor = (id: number) => {
 
         <!-- 底部导航 -->
         <van-tabbar route active-color="#07c160" inactive-color="#000">
-            <van-tabbar-item to="/" icon="chat-o" :badge="userStore.totalUnreadCount || ''">微信</van-tabbar-item>
+            <van-tabbar-item to="/" icon="chat-o" :badge="userStore.totalUnreadCount || ''">VChat</van-tabbar-item>
             <van-tabbar-item to="/contact" icon="friends-o" :badge="userStore.pendingFriendCount || ''">通讯录</van-tabbar-item>
             <van-tabbar-item icon="guide-o">发现</van-tabbar-item>
             <van-tabbar-item to="/me" icon="user-o">我</van-tabbar-item>

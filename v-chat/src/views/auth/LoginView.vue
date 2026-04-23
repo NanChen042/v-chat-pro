@@ -42,7 +42,7 @@ const handleLogin = async () => {
             <div class="w-20 h-20 bg-[#07c160] rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-green-100">
                 <van-icon name="chat" size="48" color="white" />
             </div>
-            <h1 class="text-2xl font-semibold text-gray-800">登录微信</h1>
+            <h1 class="text-2xl font-semibold text-gray-800">登录VChat</h1>
         </div>
 
         <!-- 表单区域 -->

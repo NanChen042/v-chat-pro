@@ -1,6 +1,28 @@
 # 实时聊天系统（Vue 3 + Nest.js + Socket.io）
 
+![Node](https://img.shields.io/badge/Node-%5E20.19%20%7C%7C%20%3E%3D22.12-339933?logo=node.js&logoColor=white)
+![pnpm](https://img.shields.io/badge/pnpm-Workspace-F69220?logo=pnpm&logoColor=white)
+![Vue](https://img.shields.io/badge/Vue-3-42b883?logo=vue.js&logoColor=white)
+![NestJS](https://img.shields.io/badge/NestJS-10-E0234E?logo=nestjs&logoColor=white)
+![Socket.io](https://img.shields.io/badge/Socket.io-4-010101?logo=socketdotio&logoColor=white)
+![License](https://img.shields.io/badge/License-Learning%20%26%20Demo-blue)
+
 一个可直接运行的前后端分离实时聊天项目，覆盖从注册登录到好友关系、实时私聊、会话未读与已读闭环的完整链路。
+
+## 目录
+- [功能亮点](#功能亮点)
+- [在线演示截图](#在线演示截图)
+- [技术栈](#技术栈)
+- [项目结构](#项目结构)
+- [架构图](#架构图)
+- [核心流程图（加好友到聊天）](#核心流程图加好友到聊天)
+- [快速开始（本地）](#快速开始本地)
+- [API 一览](#api-一览)
+- [Socket 事件](#socket-事件)
+- [文档导航](#文档导航)
+- [部署](#部署)
+- [常见问题](#常见问题)
+- [License](#license)
 
 ## 功能亮点
 - 用户系统：注册、登录、个人信息获取
